@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b5cad">
+<title>Receipt Capture</title>
+<script src="config.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root { --bg:#f4f6f9; --card:#fff; --text:#1f2328; --muted:#636c76; --line:#d8dee4;
+          --primary:#0b5cad; --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --wa:#25d366; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --card:#161b22; --text:#e6edf3; --muted:#8d96a0; --line:#30363d;
+            --primary:#4493f8; --ok:#3fb950; --warn:#d29922; --err:#f85149; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--primary); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:10px; }
+  header .title { font-size:18px; font-weight:600; flex:1; }
+  header .who { font-size:13px; opacity:.9; text-align:right; }
+  header button { width:auto; padding:6px 10px; font-size:13px; background:rgba(255,255,255,.18); }
+  main { max-width:520px; margin:0 auto; padding:16px; }
+  .screen { display:none; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .step { display:flex; align-items:center; gap:10px; margin-bottom:10px; font-weight:600; }
+  .num { width:26px; height:26px; border-radius:50%; background:var(--line); display:grid; place-items:center; font-size:13px; }
+  .done .num { background:var(--ok); color:#fff; }
+  label.f { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  input[type=text], input[type=password] { width:100%; padding:12px; font-size:16px; border:1px solid var(--line);
+    border-radius:8px; background:var(--bg); color:var(--text); }
+  button { display:block; width:100%; padding:13px; font-size:16px; font-weight:600; border:0; border-radius:8px;
+           background:var(--primary); color:#fff; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--primary); border:1px solid var(--primary); margin-top:8px; }
+  button.wa { background:var(--wa); color:#063; margin-top:14px; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .muted { color:var(--muted); font-size:13px; }
+  .val { word-break:break-all; font-family:ui-monospace,Consolas,monospace; font-size:14px; margin-top:6px; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); }
+  .center { text-align:center; }
+  .big { font-size:26px; font-weight:700; margin:8px 0; }
+  .icon { font-size:44px; }
+  #reader { width:100%; border-radius:8px; overflow:hidden; margin-top:8px; }
+  #preview { width:100%; border-radius:8px; margin-top:8px; display:none; }
+  /* full-screen in-app camera */
+  #cam { position:fixed; inset:0; background:#000; display:none; flex-direction:column; z-index:10; }
+  #cam video { flex:1; width:100%; min-height:0; object-fit:contain; background:#000; }
+  #cam .bar { display:flex; gap:12px; padding:16px; justify-content:center; align-items:center; }
+  #cam .shutter { width:72px; height:72px; border-radius:50%; border:5px solid #fff; background:#fff3; padding:0; }
+  #cam .cancel { width:auto; background:transparent; border:1px solid #fff8; padding:10px 16px; }
+  #cam .hint { color:#fff; text-align:center; font-size:13px; padding:8px; opacity:.8; }
+</style>
+</head>
+<body>
+<header>
+  <div class="title">Receipt Capture</div>
+  <div class="who" id="who"></div>
+  <button id="logoutBtn" style="display:none">Logout</button>
+</header>
+<main>
+
+  <!-- LOGIN -->
+  <section class="screen" id="loginScreen">
+    <div class="card">
+      <div class="step">Sign in</div>
+      <form id="loginForm" autocomplete="on">
+        <label class="f" for="username">Username</label>
+        <input type="text" id="username" autocomplete="username" autocapitalize="none" required>
+        <label class="f" for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password" required>
+        <button type="submit" style="margin-top:14px" id="loginBtn">Login</button>
+      </form>
+      <p class="muted center" id="loginMsg"></p>
+    </div>
+  </section>
+
+  <!-- LOCATION GATE -->
+  <section class="screen" id="gateScreen">
+    <div class="card center">
+      <div class="icon">&#128205;</div>
+      <div class="big" style="font-size:20px">Location is required</div>
+      <p id="gateMsg" class="muted">Getting your location…</p>
+      <div id="gateHelp" class="muted" style="text-align:left;display:none">
+        <b>To turn location on:</b>
+        <ol style="padding-left:18px;margin:6px 0">
+          <li>Turn on <b>Location / GPS</b> in your phone's quick settings.</li>
+          <li>In the browser, tap the <b>lock icon</b> next to the address &rarr; <b>Permissions</b> &rarr; <b>Location</b> &rarr; <b>Allow</b>.</li>
+          <li>Tap <b>Try again</b> below.</li>
+        </ol>
+      </div>
+      <button id="gateRetry" style="margin-top:10px">Try again</button>
+    </div>
+  </section>
+
+  <!-- MAIN FORM -->
+  <section class="screen" id="formScreen">
+    <div class="card" id="s1">
+      <div class="step"><span class="num">1</span>Scan receipt QR code</div>
+      <button id="scanBtn">Start scanner</button>
+      <div id="reader"></div>
+      <div id="qrOut" class="val"></div>
+    </div>
+
+    <div class="card" id="s2">
+      <div class="step"><span class="num">2</span>Take photo</div>
+      <button id="photoBtn">Open camera</button>
+      <img id="preview" alt="Photo preview">
+    </div>
+
+    <div class="card" id="s3">
+      <div class="step"><span class="num">3</span>Location</div>
+      <div id="locOut" class="muted">Waiting for GPS…</div>
+    </div>
+
+    <button id="submitBtn" disabled>Submit</button>
+    <p id="msg" class="muted center"></p>
+  </section>
+
+  <!-- RESULT -->
+  <section class="screen" id="resultScreen">
+    <div class="card center">
+      <div class="icon ok">&#10004;</div>
+      <div>Submitted successfully</div>
+      <div class="big" id="refOut"></div>
+      <div id="resNotes" class="muted"></div>
+      <button class="wa" id="shareBtn">Share on WhatsApp</button>
+      <button class="secondary" id="newBtn">New submission</button>
+    </div>
+  </section>
+</main>
+
+<!-- IN-APP CAMERA (no gallery) -->
+<div id="cam">
+  <video id="camVideo" playsinline autoplay muted></video>
+  <div class="hint">Point at the receipt and tap the button</div>
+  <div class="bar">
+    <button class="cancel" id="camCancel">Cancel</button>
+    <button class="shutter" id="camShutter" aria-label="Take photo"></button>
+    <span style="width:80px"></span>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const API = (window.APP_CONFIG || {}).API_URL;
+const TRA_RE = /^https?:\/\/verify\.tra\.go\.tz\/([A-Za-z0-9]+)_(\d{6})\/?$/;
+
+let session = null;           // {token, user:{username,name,employeeId}, config:{maxAccuracyM,timezone}}
+let state = freshState();
+let scanner = null, watchId = null, camStream = null;
+
+function freshState() { return { qr: null, photo: null, takenAt: null, photoPos: null, placeName: '', result: null }; }
+function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
+  $(id).style.display = 'block';
+  const loggedIn = !!session;
+  $('logoutBtn').style.display = loggedIn ? 'block' : 'none';
+  $('who').innerHTML = loggedIn ? `${esc(session.user.name)}<br>${esc(session.user.employeeId)}` : '';
+}
+
+async function api(action, data) {
+  if (!API || API.indexOf('http') !== 0) throw new Error('App not configured: set API_URL in config.js');
+  const opts = {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // simple request: no CORS preflight
+    body: JSON.stringify(Object.assign({ action, token: session && session.token }, data || {})),
+  };
+  // Apps Script sometimes drops the first connection after being idle; retry once.
+  // Not for submit: the first attempt may have been saved, so the user decides to resend.
+  const tries = action === 'submit' ? 1 : 2;
+  let r;
+  for (let i = 1; ; i++) {
+    try { r = await fetch(API, opts); break; }
+    catch (e) {
+      if (i >= tries) throw new Error('Could not reach the server. Check your internet connection and try again.');
+      await new Promise(res => setTimeout(res, 1500));
+    }
+  }
+  const j = await r.json();
+  if (!j.ok) {
+    if (j.code === 'AUTH') { logout(j.error); }
+    throw new Error(j.error || 'Request failed');
+  }
+  return j;
+}
+
+// ---------------- login ----------------
+$('loginForm').onsubmit = async e => {
+  e.preventDefault();
+  $('loginBtn').disabled = true;
+  $('loginMsg').textContent = 'Signing in… (can take up to 15 seconds)';
+  try {
+    const j = await api('login', { username: $('username').value, password: $('password').value });
+    session = { token: j.token, user: j.user, config: j.config };
+    store('session', session);
+    $('password').value = '';
+    $('loginMsg').textContent = '';
+    startLocationGate();
+  } catch (err) {
+    $('loginMsg').innerHTML = `<span class="err">${esc(err.message)}</span>`;
+  } finally {
+    $('loginBtn').disabled = false;
+  }
+};
+function logout(message) {
+  if (session) api('logout').catch(() => {});
+  session = null; store('session', null);
+  stopAll(); state = freshState(); resetForm();
+  $('loginMsg').innerHTML = message ? `<span class="warn">${esc(message)}</span>` : '';
+  show('loginScreen');
+}
+$('logoutBtn').onclick = () => logout();
+
+// ---------------- location (mandatory) ----------------
+let lastPos = null;
+function startLocationGate() {
+  show('gateScreen');
+  $('gateMsg').textContent = 'Getting your location…';
+  $('gateHelp').style.display = 'none';
+  if (!navigator.geolocation) return gateFail('This browser does not support location.');
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(p => {
+    lastPos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy,
+                time: new Date(p.timestamp).toISOString() };
+    if ($('gateScreen').style.display === 'block') show(state.result ? 'resultScreen' : 'formScreen');
+    showLoc(); refresh();
+  }, err => {
+    lastPos = null;
+    gateFail(err.code === err.PERMISSION_DENIED
+      ? 'Location permission is blocked for this site.'
+      : 'Could not get a GPS fix. Make sure Location is on and try again.');
+  }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+}
+function gateFail(msg) {
+  stopCamera(); stopScanner();
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  show('gateScreen');
+  $('gateMsg').innerHTML = `<span class="err">${esc(msg)}</span>`;
+  $('gateHelp').style.display = 'block';
+}
+$('gateRetry').onclick = startLocationGate;
+
+function showLoc() {
+  const p = state.photoPos || lastPos;
+  if (!p) return;
+  const maxAcc = session ? session.config.maxAccuracyM : 50;
+  const cls = p.acc <= maxAcc ? 'ok' : 'warn';
+  $('locOut').innerHTML = `${state.photoPos && state.placeName ? `<b>${esc(state.placeName)}</b><br>` : ''}
+    <span class="val">${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}</span><br>
+    <span class="${cls}">Accuracy ±${Math.round(p.acc)} m${p.acc > maxAcc ? ' — weak, move to open sky if possible' : ''}</span>
+    ${state.photoPos ? '<br><span class="muted">Locked at photo time</span>' : ''}`;
+}
+
+// ---------------- QR scan ----------------
+function setQr(text) {
+  state.qr = text.trim();
+  const m = state.qr.match(TRA_RE);
+  $('qrOut').innerHTML = m
+    ? `<span class="ok">TRA receipt ✓</span><br>Code: <b>${m[1].toUpperCase()}</b> &nbsp; Time: <b>${m[2].replace(/(\d\d)(\d\d)(\d\d)/, '$1:$2:$3')}</b>`
+    : `<span class="warn">Not a TRA verification link</span><br>${esc(state.qr)}`;
+  $('scanBtn').textContent = 'Scan again';
+  refresh();
+}
+async function stopScanner() {
+  if (scanner) { try { await scanner.stop(); } catch (e) {} scanner = null; $('reader').innerHTML = ''; }
+}
+$('scanBtn').onclick = async () => {
+  await stopScanner();
+  scanner = new Html5Qrcode('reader');
+  try {
+    await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 240 },
+      async text => { await stopScanner(); setQr(text); });
+  } catch (e) {
+    scanner = null;
+    $('qrOut').innerHTML = `<span class="err">Camera not available: ${esc(String(e))}</span>`;
+  }
+};
+
+// ---------------- in-app camera (live only, no gallery) ----------------
+$('photoBtn').onclick = async () => {
+  await stopScanner();
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false,
+    });
+  } catch (e) {
+    $('msg').innerHTML = `<span class="err">Camera permission is needed to take the photo.</span>`;
+    return;
+  }
+  $('camVideo').srcObject = camStream;
+  $('cam').style.display = 'flex';
+};
+function stopCamera() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  $('cam').style.display = 'none';
+}
+$('camCancel').onclick = stopCamera;
+$('camShutter').onclick = async () => {
+  const v = $('camVideo');
+  if (!v.videoWidth) return;
+  const takenAt = new Date();
+  const pos = lastPos;
+  if (!pos) { stopCamera(); return gateFail('Location lost. Turn on location and try again.'); }
+  // grab the frame before anything else so the photo matches the moment of the tap
+  const scale = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
+  const ctx = c.getContext('2d');
+  ctx.drawImage(v, 0, 0, c.width, c.height);
+  stopCamera();
+
+  state.photoPos = { ...pos };
+  state.takenAt = takenAt;
+  $('msg').textContent = 'Finding place name…';
+  state.placeName = await placeName(pos.lat, pos.lon);
+  if (!session) return;   // session expired during lookup -> already sent to login
+  const m = (state.qr || '').match(TRA_RE);
+  drawStamp(ctx, c.width, c.height, [
+    state.placeName || 'Location name unavailable',
+    `${pos.lat.toFixed(6)}, ${pos.lon.toFixed(6)}  (±${Math.round(pos.acc)} m)`,
+    formatTime(takenAt),
+    [`${session.user.name} (${session.user.employeeId})`, m && `Receipt: ${m[1].toUpperCase()}`].filter(Boolean).join('  |  '),
+  ]);
+  state.photo = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+  $('preview').src = URL.createObjectURL(state.photo);
+  $('preview').style.display = 'block';
+  $('photoBtn').textContent = 'Retake photo';
+  $('msg').textContent = '';
+  showLoc(); refresh();
+};
+async function placeName(lat, lon) {
+  try { return (await api('geocode', { lat, lon })).name || ''; } catch (e) { return ''; }
+}
+function formatTime(d) {
+  const opts = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                 second: '2-digit', hour12: false, timeZoneName: 'short' };
+  try { return new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: session.config.timezone }).format(d); }
+  catch (e) { return new Intl.DateTimeFormat('en-GB', opts).format(d); }
+}
+function drawStamp(ctx, w, h, lines) {
+  const fs = Math.max(14, Math.round(Math.min(w, h) * 0.04));
+  const pad = Math.round(fs * 0.7), lh = Math.round(fs * 1.35);
+  ctx.font = `600 ${fs}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+  const rows = [];
+  for (const line of lines) {
+    let cur = '';
+    for (const word of line.split(' ')) {
+      const test = cur ? cur + ' ' + word : word;
+      if (cur && ctx.measureText(test).width > w - pad * 2) { rows.push(cur); cur = word; }
+      else cur = test;
+    }
+    rows.push(cur);
+  }
+  const bh = rows.length * lh + pad * 2;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, h - bh, w, bh);
+  ctx.fillStyle = '#ffffff';
+  ctx.textBaseline = 'top';
+  ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 2;
+  rows.forEach((r, i) => ctx.fillText(r, pad, h - bh + pad + i * lh + (lh - fs) / 2));
+  ctx.shadowBlur = 0;
+}
+
+// ---------------- submit ----------------
+function refresh() {
+  $('s1').classList.toggle('done', !!state.qr);
+  $('s2').classList.toggle('done', !!state.photo);
+  $('s3').classList.toggle('done', !!(state.photoPos || lastPos));
+  $('submitBtn').disabled = !(state.qr && state.photo && state.photoPos && lastPos);
+}
+function blobToDataUrl(b) {
+  return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); });
+}
+$('submitBtn').onclick = async () => {
+  if (!lastPos) return gateFail('Location is required to submit.');
+  const p = state.photoPos;
+  $('submitBtn').disabled = true;
+  $('msg').textContent = 'Submitting…';
+  try {
+    const j = await api('submit', {
+      qr: state.qr, lat: p.lat, lon: p.lon, accuracy: p.acc, locationName: state.placeName,
+      takenAt: state.takenAt.toISOString(), photo: await blobToDataUrl(state.photo),
+    });
+    state.result = j;
+    $('refOut').textContent = j.ref;
+    const notes = [];
+    if (j.duplicateOf) notes.push(`<span class="warn">This receipt was already submitted (${esc(j.duplicateOf)}).</span>`);
+    if (j.lowAccuracy) notes.push('<span class="warn">Location accuracy was low.</span>');
+    notes.push(j.emailSent ? 'The team has been notified by email.' : '<span class="warn">Saved, but the email could not be sent. The admin can see it in the sheet.</span>');
+    $('resNotes').innerHTML = notes.join('<br>');
+    $('msg').textContent = '';
+    show('resultScreen');
+  } catch (err) {
+    $('msg').innerHTML = `<span class="err">${esc(err.message)}</span>`;
+    refresh();
+  }
+};
+
+// ---------------- WhatsApp share ----------------
+function shareText() {
+  const p = state.photoPos, r = state.result, m = (state.qr || '').match(TRA_RE);
+  return [
+    `*Receipt submission ${r.ref}*`,
+    `Employee: ${session.user.name} (${session.user.employeeId})`,
+    m ? `Receipt: ${m[1].toUpperCase()} at ${m[2].replace(/(\d\d)(\d\d)(\d\d)/, '$1:$2:$3')}` : `QR: ${state.qr}`,
+    `Location: ${state.placeName || '-'}`,
+    `Time: ${formatTime(state.takenAt)}`,
+    `Map: https://www.google.com/maps?q=${p.lat.toFixed(6)},${p.lon.toFixed(6)}`,
+  ].join('\n');
+}
+$('shareBtn').onclick = async () => {
+  const text = shareText();
+  const file = new File([state.photo], `${state.result.ref}.jpg`, { type: 'image/jpeg' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], text, title: state.result.ref }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  // fallback (desktop / older phones): text only via WhatsApp link
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+};
+
+// ---------------- new submission / startup ----------------
+function resetForm() {
+  $('qrOut').innerHTML = ''; $('scanBtn').textContent = 'Start scanner';
+  $('preview').style.display = 'none'; $('photoBtn').textContent = 'Open camera';
+  $('msg').textContent = ''; refresh(); showLoc();
+}
+function stopAll() {
+  stopCamera(); stopScanner();
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+}
+$('newBtn').onclick = () => {
+  state = freshState(); resetForm();
+  if (lastPos && watchId !== null) show('formScreen'); else startLocationGate();
+};
+
+session = load('session');
+if (session && session.token) startLocationGate(); else { session = null; show('loginScreen'); }
+</script>
+</body>
+</html>
