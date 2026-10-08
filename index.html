@@ -41,7 +41,16 @@
   .big { font-size:26px; font-weight:700; margin:8px 0; }
   .icon { font-size:44px; }
   #reader { width:100%; border-radius:8px; overflow:hidden; margin-top:8px; }
-  #preview { width:100%; border-radius:8px; margin-top:8px; display:none; }
+  .thumbs { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:10px; }
+  .thumbs:empty { display:none; }
+  .thumb { position:relative; aspect-ratio:3/4; border-radius:8px; overflow:hidden; background:var(--line); }
+  .thumb img { width:100%; height:100%; object-fit:cover; display:block; cursor:zoom-in; }
+  .thumb .n { position:absolute; left:4px; top:4px; background:#000a; color:#fff; font-size:11px; padding:1px 6px; border-radius:10px; }
+  .thumb .rm { position:absolute; right:4px; top:4px; width:28px; height:28px; padding:0; border-radius:50%;
+               background:#000b; color:#fff; font-size:15px; line-height:28px; }
+  #cam .count { color:#fff; font-weight:700; font-size:15px; min-width:80px; text-align:center; }
+  #cam .shutter:disabled { opacity:.35; }
+  #cam .flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .15s; }
   /* full-screen in-app camera */
   #cam { position:fixed; inset:0; background:#000; display:none; flex-direction:column; z-index:10; }
   #cam video { flex:1; width:100%; min-height:0; object-fit:contain; background:#000; }
@@ -102,9 +111,9 @@
     </div>
 
     <div class="card" id="s2">
-      <div class="step"><span class="num">2</span>Take photo</div>
+      <div class="step"><span class="num">2</span>Take photos <span class="muted" style="font-weight:400">(1 to 6)</span></div>
       <button id="photoBtn">Open camera</button>
-      <img id="preview" alt="Photo preview">
+      <div class="thumbs" id="thumbs"></div>
     </div>
 
     <div class="card" id="s3">
@@ -132,11 +141,12 @@
 <!-- IN-APP CAMERA (no gallery) -->
 <div id="cam">
   <video id="camVideo" playsinline autoplay muted></video>
-  <div class="hint">Point at the receipt and tap the button</div>
+  <div class="flash" id="camFlash"></div>
+  <div class="hint" id="camHint">Point at the receipt and tap the button</div>
   <div class="bar">
-    <button class="cancel" id="camCancel">Cancel</button>
+    <button class="cancel" id="camCancel">Done</button>
     <button class="shutter" id="camShutter" aria-label="Take photo"></button>
-    <span style="width:80px"></span>
+    <span class="count" id="camCount">0 / 6</span>
   </div>
 </div>
 
@@ -149,7 +159,10 @@ let session = null;           // {token, user:{username,name,employeeId}, config
 let state = freshState();
 let scanner = null, watchId = null, camStream = null;
 
-function freshState() { return { qr: null, photo: null, takenAt: null, photoPos: null, placeName: '', result: null }; }
+const MAX_PHOTOS = 6;
+// photos: [{blob, url, pos, takenAt, placeName}]; photoPos/takenAt/placeName mirror the FIRST photo
+// and are what gets submitted as the submission's location.
+function freshState() { return { qr: null, photos: [], takenAt: null, photoPos: null, placeName: '', result: null }; }
 function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
@@ -282,6 +295,7 @@ $('scanBtn').onclick = async () => {
 
 // ---------------- in-app camera (live only, no gallery) ----------------
 $('photoBtn').onclick = async () => {
+  if (state.photos.length >= MAX_PHOTOS) return;
   await stopScanner();
   try {
     camStream = await navigator.mediaDevices.getUserMedia({
@@ -294,44 +308,92 @@ $('photoBtn').onclick = async () => {
   }
   $('camVideo').srcObject = camStream;
   $('cam').style.display = 'flex';
+  updateCamUi();
 };
 function stopCamera() {
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   $('cam').style.display = 'none';
 }
 $('camCancel').onclick = stopCamera;
-$('camShutter').onclick = async () => {
+
+function updateCamUi() {
+  const n = state.photos.length;
+  $('camCount').textContent = `${n} / ${MAX_PHOTOS}`;
+  $('camShutter').disabled = n >= MAX_PHOTOS;
+  $('camHint').textContent = n === 0 ? 'Point at the receipt and tap the button'
+    : `Photo ${n} taken. Take another or tap Done.`;
+}
+// Shutter is never blocked: the frame is grabbed at once and stamped in the background.
+$('camShutter').onclick = () => {
   const v = $('camVideo');
-  if (!v.videoWidth) return;
+  if (!v.videoWidth || state.photos.length >= MAX_PHOTOS) return;
   const takenAt = new Date();
   const pos = lastPos;
   if (!pos) { stopCamera(); return gateFail('Location lost. Turn on location and try again.'); }
-  // grab the frame before anything else so the photo matches the moment of the tap
   const scale = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
   const c = document.createElement('canvas');
   c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
-  const ctx = c.getContext('2d');
-  ctx.drawImage(v, 0, 0, c.width, c.height);
-  stopCamera();
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  $('camFlash').style.opacity = '0.7';
+  setTimeout(() => { $('camFlash').style.opacity = '0'; }, 120);
 
-  state.photoPos = { ...pos };
-  state.takenAt = takenAt;
-  $('msg').textContent = 'Finding place name…';
-  state.placeName = await placeName(pos.lat, pos.lon);
+  const photo = { blob: null, url: null, pos: { ...pos }, takenAt, placeName: '' };
+  photo.ready = finishPhoto(photo, c);
+  state.photos.push(photo);
+  syncPhotos();
+  updateCamUi();
+  if (state.photos.length >= MAX_PHOTOS) setTimeout(stopCamera, 300);
+};
+async function finishPhoto(photo, c) {
+  const name = await placeNameNear(photo.pos);
   if (!session) return;   // session expired during lookup -> already sent to login
   const m = (state.qr || '').match(TRA_RE);
-  drawStamp(ctx, c.width, c.height, [
-    state.placeName || 'Location name unavailable',
-    `${pos.lat.toFixed(6)}, ${pos.lon.toFixed(6)}  (±${Math.round(pos.acc)} m)`,
-    formatTime(takenAt),
+  drawStamp(c.getContext('2d'), c.width, c.height, [
+    name || 'Location name unavailable',
+    `${photo.pos.lat.toFixed(6)}, ${photo.pos.lon.toFixed(6)}  (±${Math.round(photo.pos.acc)} m)`,
+    formatTime(photo.takenAt),
     [`${session.user.name} (${session.user.employeeId})`, m && `Receipt: ${m[1].toUpperCase()}`].filter(Boolean).join('  |  '),
   ]);
-  state.photo = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
-  $('preview').src = URL.createObjectURL(state.photo);
-  $('preview').style.display = 'block';
-  $('photoBtn').textContent = 'Retake photo';
-  $('msg').textContent = '';
+  photo.placeName = name;
+  photo.blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+  photo.url = URL.createObjectURL(photo.blob);
+  if (state.photos.includes(photo)) syncPhotos();
+}
+// One lookup per spot: shots within ~30 m reuse the same (possibly still running) lookup.
+let placeCache = null;
+function placeNameNear(pos) {
+  const near = placeCache && Math.abs(placeCache.lat - pos.lat) * 111000 < 30
+    && Math.abs(placeCache.lon - pos.lon) * 111000 * Math.cos(pos.lat * Math.PI / 180) < 30;
+  if (!near) {
+    const entry = { lat: pos.lat, lon: pos.lon, name: placeName(pos.lat, pos.lon) };
+    entry.name.then(n => { if (!n && placeCache === entry) placeCache = null; });   // retry next shot
+    placeCache = entry;
+  }
+  return placeCache.name;
+}
+function syncPhotos() {
+  const first = state.photos[0];
+  state.photoPos = first ? first.pos : null;
+  state.takenAt = first ? first.takenAt : null;
+  state.placeName = first ? first.placeName : '';
+  const n = state.photos.length;
+  $('thumbs').innerHTML = state.photos.map((p, i) => `
+    <div class="thumb">${p.url ? `<img src="${p.url}" alt="Photo ${i + 1}" data-i="${i}">`
+      : '<div class="muted" style="display:grid;place-items:center;height:100%">Saving…</div>'}
+      <span class="n">${i + 1}</span><button class="rm" data-rm="${i}" aria-label="Remove photo ${i + 1}">✕</button></div>`).join('');
+  $('photoBtn').textContent = n === 0 ? 'Open camera' : n >= MAX_PHOTOS ? `Maximum ${MAX_PHOTOS} photos` : `Add more photos (${n}/${MAX_PHOTOS})`;
+  $('photoBtn').disabled = n >= MAX_PHOTOS;
   showLoc(); refresh();
+}
+$('thumbs').onclick = e => {
+  const rm = e.target.closest('[data-rm]');
+  if (rm) {
+    const [gone] = state.photos.splice(Number(rm.dataset.rm), 1);
+    if (gone.url) URL.revokeObjectURL(gone.url);
+    return syncPhotos();
+  }
+  const img = e.target.closest('img[data-i]');
+  if (img) window.open(img.src, '_blank');
 };
 async function placeName(lat, lon) {
   try { return (await api('geocode', { lat, lon })).name || ''; } catch (e) { return ''; }
@@ -369,9 +431,10 @@ function drawStamp(ctx, w, h, lines) {
 // ---------------- submit ----------------
 function refresh() {
   $('s1').classList.toggle('done', !!state.qr);
-  $('s2').classList.toggle('done', !!state.photo);
+  $('s2').classList.toggle('done', state.photos.length > 0);
   $('s3').classList.toggle('done', !!(state.photoPos || lastPos));
-  $('submitBtn').disabled = !(state.qr && state.photo && state.photoPos && lastPos);
+  $('submitBtn').disabled = !(state.qr && state.photos.length && state.photoPos && lastPos);
+  $('submitBtn').textContent = state.photos.length > 1 ? `Submit (${state.photos.length} photos)` : 'Submit';
 }
 function blobToDataUrl(b) {
   return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); });
@@ -380,11 +443,15 @@ $('submitBtn').onclick = async () => {
   if (!lastPos) return gateFail('Location is required to submit.');
   const p = state.photoPos;
   $('submitBtn').disabled = true;
-  $('msg').textContent = 'Submitting…';
+  $('msg').textContent = state.photos.length > 1 ? `Uploading ${state.photos.length} photos…` : 'Submitting…';
   try {
+    await Promise.all(state.photos.map(ph => ph.ready));   // wait for any photo still being stamped
+    if (!session) return;
+    syncPhotos();   // first photo's place name is now known
     const j = await api('submit', {
       qr: state.qr, lat: p.lat, lon: p.lon, accuracy: p.acc, locationName: state.placeName,
-      takenAt: state.takenAt.toISOString(), photo: await blobToDataUrl(state.photo),
+      takenAt: state.takenAt.toISOString(),
+      photos: await Promise.all(state.photos.map(ph => blobToDataUrl(ph.blob))),
     });
     state.result = j;
     $('refOut').textContent = j.ref;
@@ -410,14 +477,16 @@ function shareText() {
     m ? `Receipt: ${m[1].toUpperCase()} at ${m[2].replace(/(\d\d)(\d\d)(\d\d)/, '$1:$2:$3')}` : `QR: ${state.qr}`,
     `Location: ${state.placeName || '-'}`,
     `Time: ${formatTime(state.takenAt)}`,
+    `Photos: ${state.photos.length}`,
     `Map: https://www.google.com/maps?q=${p.lat.toFixed(6)},${p.lon.toFixed(6)}`,
   ].join('\n');
 }
 $('shareBtn').onclick = async () => {
   const text = shareText();
-  const file = new File([state.photo], `${state.result.ref}.jpg`, { type: 'image/jpeg' });
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], text, title: state.result.ref }); return; }
+  const files = state.photos.map((p, i) =>
+    new File([p.blob], `${state.result.ref}_${i + 1}.jpg`, { type: 'image/jpeg' }));
+  if (navigator.canShare && navigator.canShare({ files })) {
+    try { await navigator.share({ files, text, title: state.result.ref }); return; }
     catch (e) { if (e.name === 'AbortError') return; }
   }
   // fallback (desktop / older phones): text only via WhatsApp link
@@ -427,14 +496,15 @@ $('shareBtn').onclick = async () => {
 // ---------------- new submission / startup ----------------
 function resetForm() {
   $('qrOut').innerHTML = ''; $('scanBtn').textContent = 'Start scanner';
-  $('preview').style.display = 'none'; $('photoBtn').textContent = 'Open camera';
-  $('msg').textContent = ''; refresh(); showLoc();
+  $('msg').textContent = '';
+  syncPhotos();
 }
 function stopAll() {
   stopCamera(); stopScanner();
   if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
 }
 $('newBtn').onclick = () => {
+  state.photos.forEach(p => { if (p.url) URL.revokeObjectURL(p.url); });
   state = freshState(); resetForm();
   if (lastPos && watchId !== null) show('formScreen'); else startLocationGate();
 };
