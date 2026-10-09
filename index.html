@@ -48,6 +48,10 @@
   .thumb .n { position:absolute; left:4px; top:4px; background:#000a; color:#fff; font-size:11px; padding:1px 6px; border-radius:10px; }
   .thumb .rm { position:absolute; right:4px; top:4px; width:28px; height:28px; padding:0; border-radius:50%;
                background:#000b; color:#fff; font-size:15px; line-height:28px; }
+  .plate { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px;
+           padding:4px 4px 4px 10px; margin:4px 6px 0 0; background:var(--bg); color:var(--text);
+           font-family:ui-monospace,Consolas,monospace; font-weight:700; font-size:14px; }
+  .plate button { width:auto; padding:5px 9px; font-size:12px; border-radius:6px; }
   #cam .count { color:#fff; font-weight:700; font-size:15px; min-width:80px; text-align:center; }
   #cam .shutter:disabled { opacity:.35; }
   #cam .flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .15s; }
@@ -116,8 +120,17 @@
       <div class="thumbs" id="thumbs"></div>
     </div>
 
+    <div class="card" id="sV">
+      <div class="step"><span class="num">3</span>Vehicle</div>
+      <label class="f" for="truckNo">Truck No <span class="err">*</span></label>
+      <input type="text" id="truckNo" placeholder="e.g. T 123 ABC" autocomplete="off" autocapitalize="characters" maxlength="20">
+      <label class="f" for="trailerNo">Trailer No</label>
+      <input type="text" id="trailerNo" placeholder="e.g. T 456 DEF (optional)" autocomplete="off" autocapitalize="characters" maxlength="20">
+      <div id="plateBox" class="muted" style="margin-top:10px"></div>
+    </div>
+
     <div class="card" id="s3">
-      <div class="step"><span class="num">3</span>Location</div>
+      <div class="step"><span class="num">4</span>Location</div>
       <div id="locOut" class="muted">Waiting for GPS…</div>
     </div>
 
@@ -358,7 +371,55 @@ async function finishPhoto(photo, c) {
   photo.blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
   photo.url = URL.createObjectURL(photo.blob);
   if (state.photos.includes(photo)) syncPhotos();
+  readPlatesFrom(photo);   // background; does not hold up the camera or submit
 }
+
+// ---------------- number plates read from photos ----------------
+let platesPending = 0;
+async function readPlatesFrom(photo) {
+  platesPending++; renderPlates();
+  try {
+    const j = await api('ocr', { photo: await blobToDataUrl(photo.blob) });
+    photo.plates = j.plates || [];
+  } catch (e) {
+    photo.plates = [];
+  } finally {
+    platesPending--;
+  }
+  if (!state.photos.includes(photo)) return renderPlates();
+  // fill Truck No automatically with the first plate found, if the user has not typed one
+  const first = detectedPlates()[0];
+  if (first && !$('truckNo').value.trim()) { $('truckNo').value = first; $('truckNo').dataset.auto = '1'; }
+  renderPlates(); refresh();
+}
+function detectedPlates() {
+  const all = [];
+  state.photos.forEach(p => (p.plates || []).forEach(x => { if (!all.includes(x)) all.push(x); }));
+  return all;
+}
+function renderPlates() {
+  const plates = detectedPlates();
+  const parts = [];
+  if (plates.length) {
+    parts.push('Number plates read from photos:<br>' + plates.map(p =>
+      `<span class="plate">${esc(p)}<button data-plate="${esc(p)}" data-to="truckNo">Truck</button><button data-plate="${esc(p)}" data-to="trailerNo">Trailer</button></span>`).join(''));
+    if ($('truckNo').dataset.auto) parts.push('<span class="warn">Truck No was filled from the photo. Please check it.</span>');
+  }
+  if (platesPending) parts.push('Reading number plates from photos…');
+  $('plateBox').innerHTML = parts.join('<br>');
+}
+$('plateBox').onclick = e => {
+  const b = e.target.closest('[data-plate]');
+  if (!b) return;
+  $(b.dataset.to).value = b.dataset.plate;
+  if (b.dataset.to === 'truckNo') delete $('truckNo').dataset.auto;
+  renderPlates(); refresh();
+};
+['truckNo', 'trailerNo'].forEach(id => $(id).addEventListener('input', () => {
+  $(id).value = $(id).value.toUpperCase();
+  if (id === 'truckNo') delete $('truckNo').dataset.auto;
+  renderPlates(); refresh();
+}));
 // One lookup per spot: shots within ~30 m reuse the same (possibly still running) lookup.
 let placeCache = null;
 function placeNameNear(pos) {
@@ -390,6 +451,7 @@ $('thumbs').onclick = e => {
   if (rm) {
     const [gone] = state.photos.splice(Number(rm.dataset.rm), 1);
     if (gone.url) URL.revokeObjectURL(gone.url);
+    renderPlates();
     return syncPhotos();
   }
   const img = e.target.closest('img[data-i]');
@@ -433,7 +495,9 @@ function refresh() {
   $('s1').classList.toggle('done', !!state.qr);
   $('s2').classList.toggle('done', state.photos.length > 0);
   $('s3').classList.toggle('done', !!(state.photoPos || lastPos));
-  $('submitBtn').disabled = !(state.qr && state.photos.length && state.photoPos && lastPos);
+  const truck = $('truckNo').value.trim();
+  $('sV').classList.toggle('done', !!truck);
+  $('submitBtn').disabled = !(state.qr && state.photos.length && truck && state.photoPos && lastPos);
   $('submitBtn').textContent = state.photos.length > 1 ? `Submit (${state.photos.length} photos)` : 'Submit';
 }
 function blobToDataUrl(b) {
@@ -451,6 +515,8 @@ $('submitBtn').onclick = async () => {
     const j = await api('submit', {
       qr: state.qr, lat: p.lat, lon: p.lon, accuracy: p.acc, locationName: state.placeName,
       takenAt: state.takenAt.toISOString(),
+      truckNo: $('truckNo').value.trim(), trailerNo: $('trailerNo').value.trim(),
+      detectedPlates: detectedPlates(),
       photos: await Promise.all(state.photos.map(ph => blobToDataUrl(ph.blob))),
     });
     state.result = j;
@@ -463,7 +529,10 @@ $('submitBtn').onclick = async () => {
     $('msg').textContent = '';
     show('resultScreen');
   } catch (err) {
-    $('msg').innerHTML = `<span class="err">${esc(err.message)}</span>`;
+    const outdated = /Photo is required/.test(err.message) && state.photos.length;
+    $('msg').innerHTML = `<span class="err">${esc(outdated
+      ? 'The Google backend is an older version. Ask the admin to deploy the latest Code.gs (Manage deployments → Edit → New version).'
+      : err.message)}</span>`;
     refresh();
   }
 };
@@ -474,6 +543,7 @@ function shareText() {
   return [
     `*Receipt submission ${r.ref}*`,
     `Employee: ${session.user.name} (${session.user.employeeId})`,
+    `Truck: ${$('truckNo').value.trim()}${$('trailerNo').value.trim() ? `  |  Trailer: ${$('trailerNo').value.trim()}` : ''}`,
     m ? `Receipt: ${m[1].toUpperCase()} at ${m[2].replace(/(\d\d)(\d\d)(\d\d)/, '$1:$2:$3')}` : `QR: ${state.qr}`,
     `Location: ${state.placeName || '-'}`,
     `Time: ${formatTime(state.takenAt)}`,
@@ -497,7 +567,8 @@ $('shareBtn').onclick = async () => {
 function resetForm() {
   $('qrOut').innerHTML = ''; $('scanBtn').textContent = 'Start scanner';
   $('msg').textContent = '';
-  syncPhotos();
+  $('truckNo').value = ''; $('trailerNo').value = ''; delete $('truckNo').dataset.auto;
+  syncPhotos(); renderPlates();
 }
 function stopAll() {
   stopCamera(); stopScanner();
