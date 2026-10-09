@@ -17,14 +17,17 @@
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
   header { background:var(--primary); color:#fff; padding:12px 16px; display:flex; align-items:center; gap:10px; }
-  header .title { font-size:18px; font-weight:600; flex:1; }
+  header .title { font-size:18px; font-weight:600; flex:1; min-width:0; }
   header .who { font-size:13px; opacity:.9; text-align:right; }
   header button { width:auto; padding:6px 10px; font-size:13px; background:rgba(255,255,255,.18); }
+  .lang { display:flex; border:1px solid rgba(255,255,255,.5); border-radius:8px; overflow:hidden; flex:none; }
+  .lang button { border-radius:0; background:transparent; padding:5px 9px; font-size:12px; opacity:.75; }
+  .lang button.on { background:#fff; color:var(--primary); opacity:1; }
   main { max-width:520px; margin:0 auto; padding:16px; }
   .screen { display:none; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
   .step { display:flex; align-items:center; gap:10px; margin-bottom:10px; font-weight:600; }
-  .num { width:26px; height:26px; border-radius:50%; background:var(--line); display:grid; place-items:center; font-size:13px; }
+  .num { width:26px; height:26px; border-radius:50%; background:var(--line); display:grid; place-items:center; font-size:13px; flex:none; }
   .done .num { background:var(--ok); color:#fff; }
   label.f { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
   input[type=text], input[type=password] { width:100%; padding:12px; font-size:16px; border:1px solid var(--line);
@@ -52,36 +55,39 @@
            padding:4px 4px 4px 10px; margin:4px 6px 0 0; background:var(--bg); color:var(--text);
            font-family:ui-monospace,Consolas,monospace; font-weight:700; font-size:14px; }
   .plate button { width:auto; padding:5px 9px; font-size:12px; border-radius:6px; }
-  #cam .count { color:#fff; font-weight:700; font-size:15px; min-width:80px; text-align:center; }
-  #cam .shutter:disabled { opacity:.35; }
-  #cam .flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .15s; }
   /* full-screen in-app camera */
   #cam { position:fixed; inset:0; background:#000; display:none; flex-direction:column; z-index:10; }
   #cam video { flex:1; width:100%; min-height:0; object-fit:contain; background:#000; }
   #cam .bar { display:flex; gap:12px; padding:16px; justify-content:center; align-items:center; }
   #cam .shutter { width:72px; height:72px; border-radius:50%; border:5px solid #fff; background:#fff3; padding:0; }
+  #cam .shutter:disabled { opacity:.35; }
   #cam .cancel { width:auto; background:transparent; border:1px solid #fff8; padding:10px 16px; }
   #cam .hint { color:#fff; text-align:center; font-size:13px; padding:8px; opacity:.8; }
+  #cam .count { color:#fff; font-weight:700; font-size:15px; min-width:80px; text-align:center; }
+  #cam .flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .15s; }
 </style>
 </head>
 <body>
 <header>
-  <div class="title">Receipt Capture</div>
+  <div class="title" data-i18n="appTitle">Receipt Capture</div>
   <div class="who" id="who"></div>
-  <button id="logoutBtn" style="display:none">Logout</button>
+  <div class="lang" role="group" aria-label="Language / Lugha">
+    <button id="langEn" lang="en">EN</button><button id="langSw" lang="sw">SW</button>
+  </div>
+  <button id="logoutBtn" style="display:none" data-i18n="logout">Logout</button>
 </header>
 <main>
 
   <!-- LOGIN -->
   <section class="screen" id="loginScreen">
     <div class="card">
-      <div class="step">Sign in</div>
+      <div class="step" data-i18n="signIn">Sign in</div>
       <form id="loginForm" autocomplete="on">
-        <label class="f" for="username">Username</label>
+        <label class="f" for="username" data-i18n="username">Username</label>
         <input type="text" id="username" autocomplete="username" autocapitalize="none" required>
-        <label class="f" for="password">Password</label>
+        <label class="f" for="password" data-i18n="password">Password</label>
         <input type="password" id="password" autocomplete="current-password" required>
-        <button type="submit" style="margin-top:14px" id="loginBtn">Login</button>
+        <button type="submit" style="margin-top:14px" id="loginBtn" data-i18n="login">Login</button>
       </form>
       <p class="muted center" id="loginMsg"></p>
     </div>
@@ -91,50 +97,51 @@
   <section class="screen" id="gateScreen">
     <div class="card center">
       <div class="icon">&#128205;</div>
-      <div class="big" style="font-size:20px">Location is required</div>
-      <p id="gateMsg" class="muted">Getting your location…</p>
+      <div class="big" style="font-size:20px" data-i18n="locRequired">Location is required</div>
+      <p id="gateMsg" class="muted"></p>
       <div id="gateHelp" class="muted" style="text-align:left;display:none">
-        <b>To turn location on:</b>
+        <b data-i18n="howTitle">To turn location on:</b>
         <ol style="padding-left:18px;margin:6px 0">
-          <li>Turn on <b>Location / GPS</b> in your phone's quick settings.</li>
-          <li>In the browser, tap the <b>lock icon</b> next to the address &rarr; <b>Permissions</b> &rarr; <b>Location</b> &rarr; <b>Allow</b>.</li>
-          <li>Tap <b>Try again</b> below.</li>
+          <li data-i18n="how1"></li>
+          <li data-i18n="how2"></li>
+          <li data-i18n="how3"></li>
         </ol>
       </div>
-      <button id="gateRetry" style="margin-top:10px">Try again</button>
+      <button id="gateRetry" style="margin-top:10px" data-i18n="tryAgain">Try again</button>
     </div>
   </section>
 
   <!-- MAIN FORM -->
   <section class="screen" id="formScreen">
     <div class="card" id="s1">
-      <div class="step"><span class="num">1</span>Scan receipt QR code</div>
-      <button id="scanBtn">Start scanner</button>
+      <div class="step"><span class="num">1</span><span data-i18n="stepQr">Scan receipt QR code</span></div>
+      <button id="scanBtn"></button>
       <div id="reader"></div>
       <div id="qrOut" class="val"></div>
     </div>
 
     <div class="card" id="s2">
-      <div class="step"><span class="num">2</span>Take photos <span class="muted" style="font-weight:400">(1 to 6)</span></div>
-      <button id="photoBtn">Open camera</button>
+      <div class="step"><span class="num">2</span><span data-i18n="stepPhotos">Take photos</span>
+        <span class="muted" style="font-weight:400" data-i18n="oneToSix">(1 to 6)</span></div>
+      <button id="photoBtn"></button>
       <div class="thumbs" id="thumbs"></div>
     </div>
 
     <div class="card" id="sV">
-      <div class="step"><span class="num">3</span>Vehicle</div>
-      <label class="f" for="truckNo">Truck No <span class="err">*</span></label>
-      <input type="text" id="truckNo" placeholder="e.g. T 123 ABC" autocomplete="off" autocapitalize="characters" maxlength="20">
-      <label class="f" for="trailerNo">Trailer No</label>
-      <input type="text" id="trailerNo" placeholder="e.g. T 456 DEF (optional)" autocomplete="off" autocapitalize="characters" maxlength="20">
+      <div class="step"><span class="num">3</span><span data-i18n="stepVehicle">Vehicle</span></div>
+      <label class="f" for="truckNo"><span data-i18n="truckNo">Truck No</span> <span class="err">*</span></label>
+      <input type="text" id="truckNo" data-i18n-ph="truckPh" autocomplete="off" autocapitalize="characters" maxlength="20">
+      <label class="f" for="trailerNo" data-i18n="trailerNo">Trailer No</label>
+      <input type="text" id="trailerNo" data-i18n-ph="trailerPh" autocomplete="off" autocapitalize="characters" maxlength="20">
       <div id="plateBox" class="muted" style="margin-top:10px"></div>
     </div>
 
     <div class="card" id="s3">
-      <div class="step"><span class="num">4</span>Location</div>
-      <div id="locOut" class="muted">Waiting for GPS…</div>
+      <div class="step"><span class="num">4</span><span data-i18n="stepLocation">Location</span></div>
+      <div id="locOut" class="muted"></div>
     </div>
 
-    <button id="submitBtn" disabled>Submit</button>
+    <button id="submitBtn" disabled></button>
     <p id="msg" class="muted center"></p>
   </section>
 
@@ -142,11 +149,11 @@
   <section class="screen" id="resultScreen">
     <div class="card center">
       <div class="icon ok">&#10004;</div>
-      <div>Submitted successfully</div>
+      <div data-i18n="submittedOk">Submitted successfully</div>
       <div class="big" id="refOut"></div>
       <div id="resNotes" class="muted"></div>
-      <button class="wa" id="shareBtn">Share on WhatsApp</button>
-      <button class="secondary" id="newBtn">New submission</button>
+      <button class="wa" id="shareBtn" data-i18n="shareWa">Share on WhatsApp</button>
+      <button class="secondary" id="newBtn" data-i18n="newSubmission">New submission</button>
     </div>
   </section>
 </main>
@@ -155,15 +162,128 @@
 <div id="cam">
   <video id="camVideo" playsinline autoplay muted></video>
   <div class="flash" id="camFlash"></div>
-  <div class="hint" id="camHint">Point at the receipt and tap the button</div>
+  <div class="hint" id="camHint"></div>
   <div class="bar">
-    <button class="cancel" id="camCancel">Done</button>
-    <button class="shutter" id="camShutter" aria-label="Take photo"></button>
+    <button class="cancel" id="camCancel" data-i18n="done">Done</button>
+    <button class="shutter" id="camShutter" data-i18n-aria="takePhoto"></button>
     <span class="count" id="camCount">0 / 6</span>
   </div>
 </div>
 
 <script>
+// ---------------- languages ----------------
+// Photo stamps and the team email stay in English on purpose (records).
+const I18N = {
+  en: {
+    appTitle: 'Receipt Capture', logout: 'Logout', signIn: 'Sign in', username: 'Username', password: 'Password',
+    login: 'Login', signingIn: 'Signing in… (can take up to 15 seconds)',
+    locRequired: 'Location is required', gettingLocation: 'Getting your location…',
+    howTitle: 'To turn location on:',
+    how1: 'Turn on <b>Location / GPS</b> in your phone\'s quick settings.',
+    how2: 'In the browser, tap the <b>lock icon</b> next to the address &rarr; <b>Permissions</b> &rarr; <b>Location</b> &rarr; <b>Allow</b>.',
+    how3: 'Tap <b>Try again</b> below.',
+    tryAgain: 'Try again',
+    locBlocked: 'Location permission is blocked for this site.',
+    locNoFix: 'Could not get a GPS fix. Make sure Location is on and try again.',
+    locUnsupported: 'This browser does not support location.',
+    locLost: 'Location lost. Turn on location and try again.',
+    locNeededToSubmit: 'Location is required to submit.',
+    stepQr: 'Scan receipt QR code', startScanner: 'Start scanner', scanAgain: 'Scan again',
+    traOk: 'TRA receipt ✓', code: 'Code', time: 'Time', notTra: 'Not a TRA verification link',
+    cameraNA: 'Camera not available:',
+    stepPhotos: 'Take photos', oneToSix: '(1 to 6)', openCamera: 'Open camera',
+    addMore: 'Add more photos ({n}/{max})', maxPhotos: 'Maximum {max} photos',
+    cameraPerm: 'Camera permission is needed to take the photo.', saving: 'Saving…',
+    camHint0: 'Point at the receipt and tap the button', camHintN: 'Photo {n} taken. Take another or tap Done.',
+    done: 'Done', takePhoto: 'Take photo', photoN: 'Photo {n}', removePhotoN: 'Remove photo {n}',
+    stepVehicle: 'Vehicle', truckNo: 'Truck No', trailerNo: 'Trailer No',
+    truckPh: 'e.g. T 123 ABC', trailerPh: 'e.g. T 456 DEF (optional)',
+    platesRead: 'Number plates read from photos:', truck: 'Truck', trailer: 'Trailer',
+    truckAuto: 'Truck No was filled from the photo. Please check it.',
+    readingPlates: 'Reading number plates from photos…',
+    stepLocation: 'Location', waitingGps: 'Waiting for GPS…', accuracy: 'Accuracy ±{m} m',
+    weak: ' — weak, move to open sky if possible', locked: 'Locked at photo time',
+    submit: 'Submit', submitN: 'Submit ({n} photos)', submitting: 'Submitting…', uploadingN: 'Uploading {n} photos…',
+    submittedOk: 'Submitted successfully', dupNote: 'This receipt was already submitted ({ref}).',
+    lowAcc: 'Location accuracy was low.', emailed: 'The team has been notified by email.',
+    emailFail: 'Saved, but the email could not be sent. The admin can see it in the sheet.',
+    shareWa: 'Share on WhatsApp', newSubmission: 'New submission',
+    noServer: 'Could not reach the server. Check your internet connection and try again.',
+    notConfigured: 'App not configured: set API_URL in config.js',
+    outdated: 'The Google backend is an older version. Ask the admin to deploy the latest Code.gs (Manage deployments → Edit → New version).',
+    // WhatsApp message
+    shTitle: 'Receipt submission', shEmployee: 'Employee', shTruck: 'Truck', shTrailer: 'Trailer',
+    shReceipt: 'Receipt', shAt: 'at', shLocation: 'Location', shTime: 'Time', shPhotos: 'Photos', shMap: 'Map',
+  },
+  sw: {
+    appTitle: 'Kunasa Risiti', logout: 'Toka', signIn: 'Ingia', username: 'Jina la mtumiaji', password: 'Nenosiri',
+    login: 'Ingia', signingIn: 'Inaingia… (inaweza kuchukua hadi sekunde 15)',
+    locRequired: 'Mahali (Location) panahitajika', gettingLocation: 'Inatafuta mahali ulipo…',
+    howTitle: 'Kuwasha Location:',
+    how1: 'Washa <b>Location / GPS</b> kwenye mipangilio ya haraka ya simu yako.',
+    how2: 'Kwenye kivinjari, gusa <b>alama ya kufuli</b> karibu na anwani &rarr; <b>Permissions</b> &rarr; <b>Location</b> &rarr; <b>Allow</b>.',
+    how3: 'Gusa <b>Jaribu tena</b> hapa chini.',
+    tryAgain: 'Jaribu tena',
+    locBlocked: 'Ruhusa ya Location imezuiwa kwa tovuti hii.',
+    locNoFix: 'Imeshindwa kupata mahali kwa GPS. Hakikisha Location imewashwa kisha jaribu tena.',
+    locUnsupported: 'Kivinjari hiki hakitumii huduma ya mahali.',
+    locLost: 'Mahali pamepotea. Washa Location kisha jaribu tena.',
+    locNeededToSubmit: 'Mahali panahitajika ili kutuma.',
+    stepQr: 'Changanua msimbo wa QR wa risiti', startScanner: 'Anza kuchanganua', scanAgain: 'Changanua tena',
+    traOk: 'Risiti ya TRA ✓', code: 'Namba', time: 'Muda', notTra: 'Si kiungo cha uthibitisho cha TRA',
+    cameraNA: 'Kamera haipatikani:',
+    stepPhotos: 'Piga picha', oneToSix: '(1 hadi 6)', openCamera: 'Fungua kamera',
+    addMore: 'Ongeza picha ({n}/{max})', maxPhotos: 'Kiwango cha juu ni picha {max}',
+    cameraPerm: 'Ruhusa ya kamera inahitajika ili kupiga picha.', saving: 'Inahifadhi…',
+    camHint0: 'Elekeza kamera kwenye risiti kisha gusa kitufe', camHintN: 'Picha ya {n} imepigwa. Piga nyingine au gusa Maliza.',
+    done: 'Maliza', takePhoto: 'Piga picha', photoN: 'Picha {n}', removePhotoN: 'Ondoa picha {n}',
+    stepVehicle: 'Gari', truckNo: 'Namba ya Lori', trailerNo: 'Namba ya Tela',
+    truckPh: 'mf. T 123 ABC', trailerPh: 'mf. T 456 DEF (si lazima)',
+    platesRead: 'Namba za usajili zilizosomwa kwenye picha:', truck: 'Lori', trailer: 'Tela',
+    truckAuto: 'Namba ya lori imejazwa kutoka kwenye picha. Tafadhali ihakiki.',
+    readingPlates: 'Inasoma namba za usajili kwenye picha…',
+    stepLocation: 'Mahali', waitingGps: 'Inasubiri GPS…', accuracy: 'Usahihi ±{m} m',
+    weak: ' — dhaifu, nenda eneo la wazi ikiwezekana', locked: 'Imefungwa wakati wa kupiga picha',
+    submit: 'Tuma', submitN: 'Tuma (picha {n})', submitting: 'Inatuma…', uploadingN: 'Inapakia picha {n}…',
+    submittedOk: 'Imetumwa kikamilifu', dupNote: 'Risiti hii ilishatumwa awali ({ref}).',
+    lowAcc: 'Usahihi wa mahali ulikuwa mdogo.', emailed: 'Timu imearifiwa kwa barua pepe.',
+    emailFail: 'Imehifadhiwa, lakini barua pepe haikuweza kutumwa. Msimamizi ataiona kwenye jedwali.',
+    shareWa: 'Shiriki kwa WhatsApp', newSubmission: 'Wasilisho jipya',
+    noServer: 'Imeshindwa kufikia seva. Angalia intaneti yako kisha jaribu tena.',
+    notConfigured: 'Programu haijasanidiwa: weka API_URL kwenye config.js',
+    outdated: 'Seva ya Google ni toleo la zamani. Mwombe msimamizi aweke Code.gs mpya (Manage deployments → Edit → New version).',
+    shTitle: 'Wasilisho la risiti', shEmployee: 'Mfanyakazi', shTruck: 'Lori', shTrailer: 'Tela',
+    shReceipt: 'Risiti', shAt: 'saa', shLocation: 'Mahali', shTime: 'Muda', shPhotos: 'Picha', shMap: 'Ramani',
+  },
+};
+// Server messages (always English from the backend) -> Swahili
+const SERVER_SW = {
+  'Invalid username or password': 'Jina la mtumiaji au nenosiri si sahihi',
+  'Enter username and password': 'Weka jina la mtumiaji na nenosiri',
+  'Too many failed attempts. Try again in 15 minutes.': 'Majaribio mengi yameshindwa. Jaribu tena baada ya dakika 15.',
+  'Session expired. Please log in again.': 'Muda wa kuingia umeisha. Tafadhali ingia tena.',
+  'Truck No is required': 'Namba ya lori inahitajika',
+  'Location is required': 'Mahali panahitajika',
+  'Photo is required': 'Picha inahitajika',
+  'QR code missing or invalid': 'Msimbo wa QR haupo au si sahihi',
+  'Photo too large': 'Picha ni kubwa mno',
+  'Maximum 6 photos': 'Kiwango cha juu ni picha 6',
+  'Invalid location': 'Mahali si sahihi',
+  'Server error, please try again.': 'Hitilafu ya seva, tafadhali jaribu tena.',
+};
+
+let lang = 'en';
+try { lang = localStorage.getItem('lang') || ''; } catch (e) {}
+if (!I18N[lang]) lang = /^sw\b/i.test(navigator.language || '') ? 'sw' : 'en';
+
+function t(key, vars) {
+  let s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+  if (vars) Object.keys(vars).forEach(k => { s = s.split('{' + k + '}').join(vars[k]); });
+  return s;
+}
+function trServer(msg) { return lang === 'sw' && SERVER_SW[msg] ? SERVER_SW[msg] : msg; }
+
+// ---------------- app ----------------
 const $ = id => document.getElementById(id);
 const API = (window.APP_CONFIG || {}).API_URL;
 const TRA_RE = /^https?:\/\/verify\.tra\.go\.tz\/([A-Za-z0-9]+)_(\d{6})\/?$/;
@@ -171,6 +291,7 @@ const TRA_RE = /^https?:\/\/verify\.tra\.go\.tz\/([A-Za-z0-9]+)_(\d{6})\/?$/;
 let session = null;           // {token, user:{username,name,employeeId}, config:{maxAccuracyM,timezone}}
 let state = freshState();
 let scanner = null, watchId = null, camStream = null;
+let gate = { key: 'gettingLocation', error: false };   // so the gate message can be re-translated
 
 const MAX_PHOTOS = 6;
 // photos: [{blob, url, pos, takenAt, placeName}]; photoPos/takenAt/placeName mirror the FIRST photo
@@ -180,6 +301,26 @@ function store(k, v) { try { v === null ? localStorage.removeItem(k) : localStor
 function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 
+function setLang(l) {
+  lang = l;
+  try { localStorage.setItem('lang', l); } catch (e) {}
+  applyLang();
+}
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = t('appTitle');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+  $('langEn').classList.toggle('on', lang === 'en');
+  $('langSw').classList.toggle('on', lang === 'sw');
+  // re-render everything that is built in code
+  renderGate(); renderQr(); syncPhotos(); renderPlates(); updateCamUi(); renderResult();
+  if (!state.photoPos && !lastPos) $('locOut').textContent = t('waitingGps');
+}
+$('langEn').onclick = () => setLang('en');
+$('langSw').onclick = () => setLang('sw');
+
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
   $(id).style.display = 'block';
@@ -188,8 +329,9 @@ function show(id) {
   $('who').innerHTML = loggedIn ? `${esc(session.user.name)}<br>${esc(session.user.employeeId)}` : '';
 }
 
+function apiError(raw) { const e = new Error(trServer(raw)); e.raw = raw; return e; }
 async function api(action, data) {
-  if (!API || API.indexOf('http') !== 0) throw new Error('App not configured: set API_URL in config.js');
+  if (!API || API.indexOf('http') !== 0) throw apiError(t('notConfigured'));
   const opts = {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // simple request: no CORS preflight
@@ -202,14 +344,14 @@ async function api(action, data) {
   for (let i = 1; ; i++) {
     try { r = await fetch(API, opts); break; }
     catch (e) {
-      if (i >= tries) throw new Error('Could not reach the server. Check your internet connection and try again.');
+      if (i >= tries) throw apiError(t('noServer'));
       await new Promise(res => setTimeout(res, 1500));
     }
   }
   const j = await r.json();
   if (!j.ok) {
-    if (j.code === 'AUTH') { logout(j.error); }
-    throw new Error(j.error || 'Request failed');
+    if (j.code === 'AUTH') { logout(trServer(j.error)); }
+    throw apiError(j.error || 'Request failed');
   }
   return j;
 }
@@ -218,7 +360,7 @@ async function api(action, data) {
 $('loginForm').onsubmit = async e => {
   e.preventDefault();
   $('loginBtn').disabled = true;
-  $('loginMsg').textContent = 'Signing in… (can take up to 15 seconds)';
+  $('loginMsg').textContent = t('signingIn');
   try {
     const j = await api('login', { username: $('username').value, password: $('password').value });
     session = { token: j.token, user: j.user, config: j.config };
@@ -243,11 +385,14 @@ $('logoutBtn').onclick = () => logout();
 
 // ---------------- location (mandatory) ----------------
 let lastPos = null;
+function renderGate() {
+  $('gateMsg').innerHTML = gate.error ? `<span class="err">${esc(t(gate.key))}</span>` : esc(t(gate.key));
+  $('gateHelp').style.display = gate.error ? 'block' : 'none';
+}
 function startLocationGate() {
   show('gateScreen');
-  $('gateMsg').textContent = 'Getting your location…';
-  $('gateHelp').style.display = 'none';
-  if (!navigator.geolocation) return gateFail('This browser does not support location.');
+  gate = { key: 'gettingLocation', error: false }; renderGate();
+  if (!navigator.geolocation) return gateFail('locUnsupported');
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
   watchId = navigator.geolocation.watchPosition(p => {
     lastPos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy,
@@ -256,17 +401,14 @@ function startLocationGate() {
     showLoc(); refresh();
   }, err => {
     lastPos = null;
-    gateFail(err.code === err.PERMISSION_DENIED
-      ? 'Location permission is blocked for this site.'
-      : 'Could not get a GPS fix. Make sure Location is on and try again.');
+    gateFail(err.code === err.PERMISSION_DENIED ? 'locBlocked' : 'locNoFix');
   }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
 }
-function gateFail(msg) {
+function gateFail(key) {
   stopCamera(); stopScanner();
   if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   show('gateScreen');
-  $('gateMsg').innerHTML = `<span class="err">${esc(msg)}</span>`;
-  $('gateHelp').style.display = 'block';
+  gate = { key, error: true }; renderGate();
 }
 $('gateRetry').onclick = startLocationGate;
 
@@ -277,19 +419,22 @@ function showLoc() {
   const cls = p.acc <= maxAcc ? 'ok' : 'warn';
   $('locOut').innerHTML = `${state.photoPos && state.placeName ? `<b>${esc(state.placeName)}</b><br>` : ''}
     <span class="val">${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}</span><br>
-    <span class="${cls}">Accuracy ±${Math.round(p.acc)} m${p.acc > maxAcc ? ' — weak, move to open sky if possible' : ''}</span>
-    ${state.photoPos ? '<br><span class="muted">Locked at photo time</span>' : ''}`;
+    <span class="${cls}">${t('accuracy', { m: Math.round(p.acc) })}${p.acc > maxAcc ? t('weak') : ''}</span>
+    ${state.photoPos ? `<br><span class="muted">${t('locked')}</span>` : ''}`;
 }
 
 // ---------------- QR scan ----------------
 function setQr(text) {
   state.qr = text.trim();
+  renderQr(); refresh();
+}
+function renderQr() {
+  $('scanBtn').textContent = state.qr ? t('scanAgain') : t('startScanner');
+  if (!state.qr) { if (!/err/.test($('qrOut').innerHTML)) $('qrOut').innerHTML = ''; return; }
   const m = state.qr.match(TRA_RE);
   $('qrOut').innerHTML = m
-    ? `<span class="ok">TRA receipt ✓</span><br>Code: <b>${m[1].toUpperCase()}</b> &nbsp; Time: <b>${m[2].replace(/(\d\d)(\d\d)(\d\d)/, '$1:$2:$3')}</b>`
-    : `<span class="warn">Not a TRA verification link</span><br>${esc(state.qr)}`;
-  $('scanBtn').textContent = 'Scan again';
-  refresh();
+    ? `<span class="ok">${t('traOk')}</span><br>${t('code')}: <b>${m[1].toUpperCase()}</b> &nbsp; ${t('time')}: <b>${m[2].replace(/(\d\d)(\d\d)(\d\d)/, '$1:$2:$3')}</b>`
+    : `<span class="warn">${t('notTra')}</span><br>${esc(state.qr)}`;
 }
 async function stopScanner() {
   if (scanner) { try { await scanner.stop(); } catch (e) {} scanner = null; $('reader').innerHTML = ''; }
@@ -302,7 +447,7 @@ $('scanBtn').onclick = async () => {
       async text => { await stopScanner(); setQr(text); });
   } catch (e) {
     scanner = null;
-    $('qrOut').innerHTML = `<span class="err">Camera not available: ${esc(String(e))}</span>`;
+    $('qrOut').innerHTML = `<span class="err">${t('cameraNA')} ${esc(String(e))}</span>`;
   }
 };
 
@@ -316,7 +461,7 @@ $('photoBtn').onclick = async () => {
       audio: false,
     });
   } catch (e) {
-    $('msg').innerHTML = `<span class="err">Camera permission is needed to take the photo.</span>`;
+    $('msg').innerHTML = `<span class="err">${t('cameraPerm')}</span>`;
     return;
   }
   $('camVideo').srcObject = camStream;
@@ -324,7 +469,7 @@ $('photoBtn').onclick = async () => {
   updateCamUi();
 };
 function stopCamera() {
-  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  if (camStream) { camStream.getTracks().forEach(tr => tr.stop()); camStream = null; }
   $('cam').style.display = 'none';
 }
 $('camCancel').onclick = stopCamera;
@@ -333,8 +478,7 @@ function updateCamUi() {
   const n = state.photos.length;
   $('camCount').textContent = `${n} / ${MAX_PHOTOS}`;
   $('camShutter').disabled = n >= MAX_PHOTOS;
-  $('camHint').textContent = n === 0 ? 'Point at the receipt and tap the button'
-    : `Photo ${n} taken. Take another or tap Done.`;
+  $('camHint').textContent = n === 0 ? t('camHint0') : t('camHintN', { n });
 }
 // Shutter is never blocked: the frame is grabbed at once and stamped in the background.
 $('camShutter').onclick = () => {
@@ -342,7 +486,7 @@ $('camShutter').onclick = () => {
   if (!v.videoWidth || state.photos.length >= MAX_PHOTOS) return;
   const takenAt = new Date();
   const pos = lastPos;
-  if (!pos) { stopCamera(); return gateFail('Location lost. Turn on location and try again.'); }
+  if (!pos) { stopCamera(); return gateFail('locLost'); }
   const scale = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
   const c = document.createElement('canvas');
   c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
@@ -361,7 +505,7 @@ async function finishPhoto(photo, c) {
   const name = await placeNameNear(photo.pos);
   if (!session) return;   // session expired during lookup -> already sent to login
   const m = (state.qr || '').match(TRA_RE);
-  drawStamp(c.getContext('2d'), c.width, c.height, [
+  drawStamp(c.getContext('2d'), c.width, c.height, [   // stamp is always English (record)
     name || 'Location name unavailable',
     `${photo.pos.lat.toFixed(6)}, ${photo.pos.lon.toFixed(6)}  (±${Math.round(photo.pos.acc)} m)`,
     formatTime(photo.takenAt),
@@ -401,11 +545,11 @@ function renderPlates() {
   const plates = detectedPlates();
   const parts = [];
   if (plates.length) {
-    parts.push('Number plates read from photos:<br>' + plates.map(p =>
-      `<span class="plate">${esc(p)}<button data-plate="${esc(p)}" data-to="truckNo">Truck</button><button data-plate="${esc(p)}" data-to="trailerNo">Trailer</button></span>`).join(''));
-    if ($('truckNo').dataset.auto) parts.push('<span class="warn">Truck No was filled from the photo. Please check it.</span>');
+    parts.push(t('platesRead') + '<br>' + plates.map(p =>
+      `<span class="plate">${esc(p)}<button data-plate="${esc(p)}" data-to="truckNo">${t('truck')}</button><button data-plate="${esc(p)}" data-to="trailerNo">${t('trailer')}</button></span>`).join(''));
+    if ($('truckNo').dataset.auto) parts.push(`<span class="warn">${t('truckAuto')}</span>`);
   }
-  if (platesPending) parts.push('Reading number plates from photos…');
+  if (platesPending) parts.push(t('readingPlates'));
   $('plateBox').innerHTML = parts.join('<br>');
 }
 $('plateBox').onclick = e => {
@@ -439,10 +583,11 @@ function syncPhotos() {
   state.placeName = first ? first.placeName : '';
   const n = state.photos.length;
   $('thumbs').innerHTML = state.photos.map((p, i) => `
-    <div class="thumb">${p.url ? `<img src="${p.url}" alt="Photo ${i + 1}" data-i="${i}">`
-      : '<div class="muted" style="display:grid;place-items:center;height:100%">Saving…</div>'}
-      <span class="n">${i + 1}</span><button class="rm" data-rm="${i}" aria-label="Remove photo ${i + 1}">✕</button></div>`).join('');
-  $('photoBtn').textContent = n === 0 ? 'Open camera' : n >= MAX_PHOTOS ? `Maximum ${MAX_PHOTOS} photos` : `Add more photos (${n}/${MAX_PHOTOS})`;
+    <div class="thumb">${p.url ? `<img src="${p.url}" alt="${t('photoN', { n: i + 1 })}" data-i="${i}">`
+      : `<div class="muted" style="display:grid;place-items:center;height:100%">${t('saving')}</div>`}
+      <span class="n">${i + 1}</span><button class="rm" data-rm="${i}" aria-label="${t('removePhotoN', { n: i + 1 })}">✕</button></div>`).join('');
+  $('photoBtn').textContent = n === 0 ? t('openCamera')
+    : n >= MAX_PHOTOS ? t('maxPhotos', { max: MAX_PHOTOS }) : t('addMore', { n, max: MAX_PHOTOS });
   $('photoBtn').disabled = n >= MAX_PHOTOS;
   showLoc(); refresh();
 }
@@ -460,11 +605,12 @@ $('thumbs').onclick = e => {
 async function placeName(lat, lon) {
   try { return (await api('geocode', { lat, lon })).name || ''; } catch (e) { return ''; }
 }
-function formatTime(d) {
+function formatTime(d, locale) {
   const opts = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
                  second: '2-digit', hour12: false, timeZoneName: 'short' };
-  try { return new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: session.config.timezone }).format(d); }
-  catch (e) { return new Intl.DateTimeFormat('en-GB', opts).format(d); }
+  const loc = locale || 'en-GB';
+  try { return new Intl.DateTimeFormat(loc, { ...opts, timeZone: session.config.timezone }).format(d); }
+  catch (e) { return new Intl.DateTimeFormat(loc, opts).format(d); }
 }
 function drawStamp(ctx, w, h, lines) {
   const fs = Math.max(14, Math.round(Math.min(w, h) * 0.04));
@@ -498,16 +644,16 @@ function refresh() {
   const truck = $('truckNo').value.trim();
   $('sV').classList.toggle('done', !!truck);
   $('submitBtn').disabled = !(state.qr && state.photos.length && truck && state.photoPos && lastPos);
-  $('submitBtn').textContent = state.photos.length > 1 ? `Submit (${state.photos.length} photos)` : 'Submit';
+  $('submitBtn').textContent = state.photos.length > 1 ? t('submitN', { n: state.photos.length }) : t('submit');
 }
 function blobToDataUrl(b) {
   return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); });
 }
 $('submitBtn').onclick = async () => {
-  if (!lastPos) return gateFail('Location is required to submit.');
+  if (!lastPos) return gateFail('locNeededToSubmit');
   const p = state.photoPos;
   $('submitBtn').disabled = true;
-  $('msg').textContent = state.photos.length > 1 ? `Uploading ${state.photos.length} photos…` : 'Submitting…';
+  $('msg').textContent = state.photos.length > 1 ? t('uploadingN', { n: state.photos.length }) : t('submitting');
   try {
     await Promise.all(state.photos.map(ph => ph.ready));   // wait for any photo still being stamped
     if (!session) return;
@@ -520,35 +666,39 @@ $('submitBtn').onclick = async () => {
       photos: await Promise.all(state.photos.map(ph => blobToDataUrl(ph.blob))),
     });
     state.result = j;
-    $('refOut').textContent = j.ref;
-    const notes = [];
-    if (j.duplicateOf) notes.push(`<span class="warn">This receipt was already submitted (${esc(j.duplicateOf)}).</span>`);
-    if (j.lowAccuracy) notes.push('<span class="warn">Location accuracy was low.</span>');
-    notes.push(j.emailSent ? 'The team has been notified by email.' : '<span class="warn">Saved, but the email could not be sent. The admin can see it in the sheet.</span>');
-    $('resNotes').innerHTML = notes.join('<br>');
+    renderResult();
     $('msg').textContent = '';
     show('resultScreen');
   } catch (err) {
-    const outdated = /Photo is required/.test(err.message) && state.photos.length;
-    $('msg').innerHTML = `<span class="err">${esc(outdated
-      ? 'The Google backend is an older version. Ask the admin to deploy the latest Code.gs (Manage deployments → Edit → New version).'
-      : err.message)}</span>`;
+    const outdated = err.raw === 'Photo is required' && state.photos.length;
+    $('msg').innerHTML = `<span class="err">${esc(outdated ? t('outdated') : err.message)}</span>`;
     refresh();
   }
 };
+function renderResult() {
+  const j = state.result;
+  if (!j) return;
+  $('refOut').textContent = j.ref;
+  const notes = [];
+  if (j.duplicateOf) notes.push(`<span class="warn">${t('dupNote', { ref: esc(j.duplicateOf) })}</span>`);
+  if (j.lowAccuracy) notes.push(`<span class="warn">${t('lowAcc')}</span>`);
+  notes.push(j.emailSent ? t('emailed') : `<span class="warn">${t('emailFail')}</span>`);
+  $('resNotes').innerHTML = notes.join('<br>');
+}
 
-// ---------------- WhatsApp share ----------------
+// ---------------- WhatsApp share (in the selected language) ----------------
 function shareText() {
   const p = state.photoPos, r = state.result, m = (state.qr || '').match(TRA_RE);
+  const truck = $('truckNo').value.trim(), trailer = $('trailerNo').value.trim();
   return [
-    `*Receipt submission ${r.ref}*`,
-    `Employee: ${session.user.name} (${session.user.employeeId})`,
-    `Truck: ${$('truckNo').value.trim()}${$('trailerNo').value.trim() ? `  |  Trailer: ${$('trailerNo').value.trim()}` : ''}`,
-    m ? `Receipt: ${m[1].toUpperCase()} at ${m[2].replace(/(\d\d)(\d\d)(\d\d)/, '$1:$2:$3')}` : `QR: ${state.qr}`,
-    `Location: ${state.placeName || '-'}`,
-    `Time: ${formatTime(state.takenAt)}`,
-    `Photos: ${state.photos.length}`,
-    `Map: https://www.google.com/maps?q=${p.lat.toFixed(6)},${p.lon.toFixed(6)}`,
+    `*${t('shTitle')} ${r.ref}*`,
+    `${t('shEmployee')}: ${session.user.name} (${session.user.employeeId})`,
+    `${t('shTruck')}: ${truck}${trailer ? `  |  ${t('shTrailer')}: ${trailer}` : ''}`,
+    m ? `${t('shReceipt')}: ${m[1].toUpperCase()} ${t('shAt')} ${m[2].replace(/(\d\d)(\d\d)(\d\d)/, '$1:$2:$3')}` : `QR: ${state.qr}`,
+    `${t('shLocation')}: ${state.placeName || '-'}`,
+    `${t('shTime')}: ${formatTime(state.takenAt, lang === 'sw' ? 'sw-TZ' : 'en-GB')}`,
+    `${t('shPhotos')}: ${state.photos.length}`,
+    `${t('shMap')}: https://www.google.com/maps?q=${p.lat.toFixed(6)},${p.lon.toFixed(6)}`,
   ].join('\n');
 }
 $('shareBtn').onclick = async () => {
@@ -565,10 +715,10 @@ $('shareBtn').onclick = async () => {
 
 // ---------------- new submission / startup ----------------
 function resetForm() {
-  $('qrOut').innerHTML = ''; $('scanBtn').textContent = 'Start scanner';
+  $('qrOut').innerHTML = '';
   $('msg').textContent = '';
   $('truckNo').value = ''; $('trailerNo').value = ''; delete $('truckNo').dataset.auto;
-  syncPhotos(); renderPlates();
+  renderQr(); syncPhotos(); renderPlates();
 }
 function stopAll() {
   stopCamera(); stopScanner();
@@ -580,6 +730,7 @@ $('newBtn').onclick = () => {
   if (lastPos && watchId !== null) show('formScreen'); else startLocationGate();
 };
 
+applyLang();
 session = load('session');
 if (session && session.token) startLocationGate(); else { session = null; show('loginScreen'); }
 </script>
