@@ -210,6 +210,7 @@ const I18N = {
     locNeededToSubmit: 'Location is required to submit.',
     stepQr: 'Scan receipt QR code', startScanner: 'Start scanner', scanAgain: 'Scan again',
     traOk: 'TRA receipt ✓', code: 'Code', time: 'Time', notTra: 'Not a TRA verification link',
+    invalidQr: 'This is not a valid TRA receipt QR code. Scan the QR code printed on the TRA receipt.',
     cameraNA: 'Camera not available:',
     stepPhotos: 'Take photos', oneToSix: '(1 to 6)', openCamera: 'Open camera',
     addMore: 'Add more photos ({n}/{max})', maxPhotos: 'Maximum {max} photos',
@@ -261,6 +262,7 @@ const I18N = {
     locNeededToSubmit: 'Mahali panahitajika ili kutuma.',
     stepQr: 'Changanua msimbo wa QR wa risiti', startScanner: 'Anza kuchanganua', scanAgain: 'Changanua tena',
     traOk: 'Risiti ya TRA ✓', code: 'Namba', time: 'Muda', notTra: 'Si kiungo cha uthibitisho cha TRA',
+    invalidQr: 'Huu si msimbo halali wa QR wa risiti ya TRA. Changanua msimbo wa QR uliochapishwa kwenye risiti ya TRA.',
     cameraNA: 'Kamera haipatikani:',
     stepPhotos: 'Piga picha', oneToSix: '(1 hadi 6)', openCamera: 'Fungua kamera',
     addMore: 'Ongeza picha ({n}/{max})', maxPhotos: 'Kiwango cha juu ni picha {max}',
@@ -309,6 +311,7 @@ const SERVER_SW = {
   'Maximum 6 photos': 'Kiwango cha juu ni picha 6',
   'Invalid location': 'Mahali si sahihi',
   'Server error, please try again.': 'Hitilafu ya seva, tafadhali jaribu tena.',
+  'Not a valid TRA receipt QR code': 'Huu si msimbo halali wa QR wa risiti ya TRA',
 };
 
 let lang = 'en';
@@ -478,28 +481,47 @@ function showLoc() {
     ${state.photoPos ? `<br><span class="muted">${t('locked')}</span>` : ''}`;
 }
 
-// ---------------- QR scan ----------------
+// ---------------- QR scan (TRA receipts only) ----------------
+// Valid: https://verify.tra.go.tz/<code>_<HHMMSS> with a 6-30 character code and a real time of day.
+function parseTraQr(text) {
+  const m = String(text || '').trim().match(TRA_RE);
+  if (!m || m[1].length < 6 || m[1].length > 30) return null;
+  const hh = +m[2].slice(0, 2), mm = +m[2].slice(2, 4), ss = +m[2].slice(4, 6);
+  if (hh > 23 || mm > 59 || ss > 59) return null;
+  return { code: m[1].toUpperCase(), time: m[2].replace(/(\d\d)(\d\d)(\d\d)/, '$1:$2:$3') };
+}
+let qrRejected = '';   // last wrong code seen while scanning (shown until a valid one is found)
 function setQr(text) {
+  if (!parseTraQr(text)) { qrRejected = String(text || '').trim(); state.qr = null; renderQr(); refresh(); return false; }
+  qrRejected = '';
   state.qr = text.trim();
   renderQr(); refresh();
+  return true;
 }
 function renderQr() {
   $('scanBtn').textContent = state.qr ? t('scanAgain') : t('startScanner');
-  if (!state.qr) { if (!/err/.test($('qrOut').innerHTML)) $('qrOut').innerHTML = ''; return; }
-  const m = state.qr.match(TRA_RE);
-  $('qrOut').innerHTML = m
-    ? `<span class="ok">${t('traOk')}</span><br>${t('code')}: <b>${m[1].toUpperCase()}</b> &nbsp; ${t('time')}: <b>${m[2].replace(/(\d\d)(\d\d)(\d\d)/, '$1:$2:$3')}</b>`
-    : `<span class="warn">${t('notTra')}</span><br>${esc(state.qr)}`;
+  if (state.qr) {
+    const q = parseTraQr(state.qr);
+    $('qrOut').innerHTML = `<span class="ok">${t('traOk')}</span><br>${t('code')}: <b>${q.code}</b> &nbsp; ${t('time')}: <b>${q.time}</b>`;
+  } else if (qrRejected) {
+    $('qrOut').innerHTML = `<span class="err"><b>${t('invalidQr')}</b></span><br><span class="muted">${esc(qrRejected.slice(0, 120))}</span>`;
+  } else if (!/err/.test($('qrOut').innerHTML)) {
+    $('qrOut').innerHTML = '';
+  }
 }
 async function stopScanner() {
   if (scanner) { try { await scanner.stop(); } catch (e) {} scanner = null; $('reader').innerHTML = ''; }
 }
 $('scanBtn').onclick = async () => {
   await stopScanner();
+  state.qr = null; qrRejected = ''; renderQr(); refresh();   // a new scan replaces the old code
   scanner = new Html5Qrcode('reader');
   try {
-    await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 240 },
-      async text => { await stopScanner(); setQr(text); });
+    await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 240 }, async text => {
+      if (!scanner) return;
+      if (parseTraQr(text)) { await stopScanner(); setQr(text); }
+      else if (text.trim() !== qrRejected) { setQr(text); if (navigator.vibrate) navigator.vibrate(200); }   // wrong code: keep scanning
+    });
   } catch (e) {
     scanner = null;
     $('qrOut').innerHTML = `<span class="err">${t('cameraNA')} ${esc(String(e))}</span>`;
@@ -720,6 +742,7 @@ function submitPayload() {
 }
 $('submitBtn').onclick = async () => {
   if (!lastPos) return gateFail('locNeededToSubmit');
+  if (!parseTraQr(state.qr)) { qrRejected = qrRejected || String(state.qr || ''); state.qr = null; renderQr(); return refresh(); }
   $('submitBtn').disabled = true;
   $('msg').textContent = state.photos.length > 1 ? t('uploadingN', { n: state.photos.length }) : t('submitting');
   let payload = null;
@@ -931,7 +954,7 @@ $('shareBtn').onclick = async () => {
 
 // ---------------- new submission / startup ----------------
 function resetForm() {
-  $('qrOut').innerHTML = '';
+  $('qrOut').innerHTML = ''; qrRejected = '';
   $('msg').textContent = '';
   $('truckNo').value = ''; $('trailerNo').value = ''; delete $('truckNo').dataset.auto;
   renderQr(); syncPhotos(); renderPlates();
